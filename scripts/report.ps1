@@ -74,10 +74,7 @@ New-Item -ItemType Directory -Force -Path $reportsDir | Out-Null
 $n = Get-NextReportNumber $reportsDir
 $prefix = Pad3 $n
 
-$reportSuffix = "LEVEL_2_TESTABLE_RUNTIME_REPORT"
-if (Test-Path -LiteralPath "LEVEL_2_1_HANDOFF_REPORT_HARDENING.md" -PathType Leaf) {
-  $reportSuffix = "LEVEL_2_1_HANDOFF_REPORT_HARDENING_REPORT"
-}
+$reportSuffix = "LEVEL_2_1_NEWLINE_ENCODING_HARDENING_REPORT"
 
 $reportPath = Join-Path $reportsDir ("{0}_{1}.md" -f $prefix, $reportSuffix)
 
@@ -139,7 +136,8 @@ foreach ($c in $json.checks) {
   $checksMd += ("- **{0}**: {1} ({2}) - {3}`n" -f $c.code, $marker, $c.severity, $c.message)
   if ($null -ne $c.detail) {
     $detailJson = ($c.detail | ConvertTo-Json -Depth 10)
-    $checksMd += ("  - detail: `{0}`n" -f ($detailJson -replace "\r?\n"," "))
+    $detailInline = $detailJson.Replace("`r`n", " ").Replace("`n", " ").Replace("`r", " ")
+    $checksMd += ("  - detail: `{0}`n" -f $detailInline)
   }
 }
 
@@ -202,17 +200,18 @@ $lines.Add("") | Out-Null
 
 $lines.Add("## Checks") | Out-Null
 $lines.Add("") | Out-Null
-foreach ($ln in ($checksMd -split "`r?`n")) { $lines.Add($ln) | Out-Null }
+$splitPattern = "`r`n|`n|`r"
+foreach ($ln in ($checksMd -split $splitPattern)) { $lines.Add($ln) | Out-Null }
 $lines.Add("") | Out-Null
 
 $lines.Add("## Warnings") | Out-Null
 $lines.Add("") | Out-Null
-foreach ($ln in ($warningsMd -split "`r?`n")) { $lines.Add($ln) | Out-Null }
+foreach ($ln in ($warningsMd -split $splitPattern)) { $lines.Add($ln) | Out-Null }
 $lines.Add("") | Out-Null
 
 $lines.Add("## Errors") | Out-Null
 $lines.Add("") | Out-Null
-foreach ($ln in ($errorsMd -split "`r?`n")) { $lines.Add($ln) | Out-Null }
+foreach ($ln in ($errorsMd -split $splitPattern)) { $lines.Add($ln) | Out-Null }
 $lines.Add("") | Out-Null
 
 $lines.Add("## Next Step") | Out-Null
@@ -223,14 +222,16 @@ $lines.Add("") | Out-Null
 $lines.Add("## Raw JSON (verbatim)") | Out-Null
 $lines.Add("") | Out-Null
 $lines.Add("~~~json") | Out-Null
-foreach ($ln in ($raw -split "`r?`n")) { $lines.Add($ln) | Out-Null }
+foreach ($ln in ($raw -split $splitPattern)) { $lines.Add($ln) | Out-Null }
 $lines.Add("~~~") | Out-Null
 $lines.Add("") | Out-Null
 
-foreach ($ln in ($handoff -split "`r?`n")) { $lines.Add($ln) | Out-Null }
+foreach ($ln in ($handoff -split $splitPattern)) { $lines.Add($ln) | Out-Null }
 $lines.Add("") | Out-Null
 
-[System.IO.File]::WriteAllText($reportPath, ($lines -join [Environment]::NewLine), [System.Text.Encoding]::UTF8)
+$encoding = New-Object System.Text.UTF8Encoding($false)
+$newline = "`r`n"
+[System.IO.File]::WriteAllText($reportPath, ($lines -join $newline), $encoding)
 
 Write-Host ("Wrote report: {0}" -f $reportPath)
 Write-Host ("traceId={0} status={1}" -f $traceId, $status)
