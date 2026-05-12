@@ -170,3 +170,5 @@ _(Chờ thực thi `git push` sau commit đầu tiên.)_
 - **Thời điểm (UTC):** 2026-05-12T07:28:08.7739642Z
 - **Kết quả:** Thành công — main đã push lên origin (commit fa78cc).
 - **Ghi chú:** Thông báo PowerShell về stream stderr của git có thể hiển thị dù push thành công; xác nhận bằng main -> main.
+
+- **Làm rõ placeholder:** Dòng “_(Chờ thực thi git push sau commit đầu tiên.)_” ở cuối báo cáo ban đầu đã được bổ sung bằng mục “Git push (append-only — đã chạy)” ở phía trên (append-only).
