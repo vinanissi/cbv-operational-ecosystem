@@ -1,8 +1,12 @@
 $ErrorActionPreference = 'Stop'
 
+function Pad3([int]$n) {
+  return $n.ToString("000")
+}
+
 function Get-NextReportNumber([string]$reportsDir) {
   if (-not (Test-Path -LiteralPath $reportsDir -PathType Container)) { return 1 }
-  $existing = Get-ChildItem -LiteralPath $reportsDir -File -Filter "*_LEVEL_2_TESTABLE_RUNTIME_REPORT.md" -ErrorAction SilentlyContinue
+  $existing = Get-ChildItem -LiteralPath $reportsDir -File -ErrorAction SilentlyContinue
   $max = 0
   foreach ($f in $existing) {
     if ($f.Name -match '^(\d{3})_') {
@@ -13,9 +17,38 @@ function Get-NextReportNumber([string]$reportsDir) {
   return ($max + 1)
 }
 
-function Pad3([int]$n) {
-  return $n.ToString("000")
+function New-TraceId {
+  $rand = -join ((97..122) | Get-Random -Count 6 | ForEach-Object { [char]$_ })
+  return ("trc_{0}_{1}_{2}" -f (Get-Date).ToUniversalTime().ToString('yyyyMMdd'), (Get-Date).ToUniversalTime().ToString('HHmmss'), $rand)
 }
+
+function Require-Fields($obj, [string[]]$required) {
+  $missing = New-Object 'System.Collections.Generic.List[string]'
+  foreach ($k in $required) {
+    if ($null -eq $obj.PSObject.Properties[$k]) { $missing.Add($k) | Out-Null }
+  }
+  return $missing.ToArray()
+}
+
+$requiredFields = @(
+  "ok",
+  "phase",
+  "status",
+  "checkedAt",
+  "runBy",
+  "traceId",
+  "testSuite",
+  "summary",
+  "checks",
+  "warnings",
+  "errors",
+  "nextStep",
+  "severity",
+  "reportText",
+  "reportJson",
+  "contractVersion",
+  "envelopeOk"
+)
 
 $inputPath = ".tmp/test-result.json"
 if (-not (Test-Path -LiteralPath $inputPath -PathType Leaf)) {
@@ -30,10 +63,55 @@ New-Item -ItemType Directory -Force -Path $reportsDir | Out-Null
 
 $n = Get-NextReportNumber $reportsDir
 $prefix = Pad3 $n
-$reportPath = Join-Path $reportsDir ("{0}_LEVEL_2_TESTABLE_RUNTIME_REPORT.md" -f $prefix)
+
+$reportSuffix = "LEVEL_2_TESTABLE_RUNTIME_REPORT"
+if (Test-Path -LiteralPath "LEVEL_2_1_HANDOFF_REPORT_HARDENING.md" -PathType Leaf) {
+  $reportSuffix = "LEVEL_2_1_HANDOFF_REPORT_HARDENING_REPORT"
+}
+
+$reportPath = Join-Path $reportsDir ("{0}_{1}.md" -f $prefix, $reportSuffix)
 
 if (Test-Path -LiteralPath $reportPath) {
   throw "Refusing to overwrite existing report: $reportPath"
+}
+
+$missing = Require-Fields $json $requiredFields
+
+if ($missing.Count -gt 0) {
+  $trace = $null
+  if ($null -ne $json.PSObject.Properties["traceId"]) { $trace = $json.traceId }
+  if ([string]::IsNullOrWhiteSpace($trace)) { $trace = New-TraceId }
+
+  $failObj = [ordered]@{
+    ok = $false
+    phase = "LEVEL_2_1_HANDOFF_REPORT_HARDENING"
+    status = "FAIL"
+    checkedAt = (Get-Date).ToUniversalTime().ToString('o')
+    runBy = $env:USERNAME
+    traceId = $trace
+    testSuite = "report-contract-validate"
+    summary = "Report generation blocked: missing required fields in .tmp/test-result.json."
+    checks = @(
+      [ordered]@{
+        code = "REPORT_CONTRACT_VALIDATE_REQUIRED_FIELDS"
+        ok = $false
+        severity = "ERROR"
+        message = "Missing required fields."
+        detail = [ordered]@{ missing = @($missing); required = $requiredFields }
+      }
+    )
+    warnings = @()
+    errors = @("MISSING_REQUIRED_FIELDS")
+    nextStep = "Fix test output to include required fields, rerun scripts/test.ps1, then rerun scripts/report.ps1."
+    severity = "ERROR"
+    reportText = "FAIL: report.ps1 refused to produce a GO report because required fields were missing."
+    reportJson = [ordered]@{ missing = @($missing); required = $requiredFields }
+    contractVersion = "1.0"
+    envelopeOk = $false
+  }
+
+  $raw = ($failObj | ConvertTo-Json -Depth 10)
+  $json = $failObj | ConvertFrom-Json
 }
 
 $checkedAt = $json.checkedAt
@@ -56,14 +134,14 @@ foreach ($c in $json.checks) {
 }
 
 $warningsMd = ""
-if ($json.warnings.Count -gt 0) {
+if ($null -ne $json.warnings -and $json.warnings.Count -gt 0) {
   foreach ($w in $json.warnings) { $warningsMd += ("- {0}`n" -f $w) }
 } else {
   $warningsMd = "- (none)`n"
 }
 
 $errorsMd = ""
-if ($json.errors.Count -gt 0) {
+if ($null -ne $json.errors -and $json.errors.Count -gt 0) {
   foreach ($e in $json.errors) { $errorsMd += ("- {0}`n" -f $e) }
 } else {
   $errorsMd = "- (none)`n"
@@ -93,45 +171,56 @@ $errorsMd
   - Define concrete domain smoke suites in `tests/<domain>/` without touching production runtime
 "@
 
-$md = @"
-# LEVEL 2 - TESTABLE RUNTIME REPORT
+$lines = New-Object 'System.Collections.Generic.List[string]'
 
-**phase:** $phase  
-**status:** $status  
-**severity:** $severity  
-**checkedAt:** $checkedAt  
-**runBy:** $runBy  
-**traceId:** $traceId  
-**testSuite:** $suite  
-**contractVersion:** $($json.contractVersion)  
+$lines.Add("# $reportSuffix") | Out-Null
+$lines.Add("") | Out-Null
+$lines.Add(("**phase:** {0}  " -f $phase)) | Out-Null
+$lines.Add(("**status:** {0}  " -f $status)) | Out-Null
+$lines.Add(("**severity:** {0}  " -f $severity)) | Out-Null
+$lines.Add(("**checkedAt:** {0}  " -f $checkedAt)) | Out-Null
+$lines.Add(("**runBy:** {0}  " -f $runBy)) | Out-Null
+$lines.Add(("**traceId:** {0}  " -f $traceId)) | Out-Null
+$lines.Add(("**testSuite:** {0}  " -f $suite)) | Out-Null
+$lines.Add(("**contractVersion:** {0}  " -f $json.contractVersion)) | Out-Null
+$lines.Add("") | Out-Null
 
-## Summary
+$lines.Add("## Summary") | Out-Null
+$lines.Add("") | Out-Null
+$lines.Add([string]$json.summary) | Out-Null
+$lines.Add("") | Out-Null
 
-$($json.summary)
+$lines.Add("## Checks") | Out-Null
+$lines.Add("") | Out-Null
+foreach ($ln in ($checksMd -split "`r?`n")) { $lines.Add($ln) | Out-Null }
+$lines.Add("") | Out-Null
 
-## Checks
+$lines.Add("## Warnings") | Out-Null
+$lines.Add("") | Out-Null
+foreach ($ln in ($warningsMd -split "`r?`n")) { $lines.Add($ln) | Out-Null }
+$lines.Add("") | Out-Null
 
-$checksMd
-## Warnings
+$lines.Add("## Errors") | Out-Null
+$lines.Add("") | Out-Null
+foreach ($ln in ($errorsMd -split "`r?`n")) { $lines.Add($ln) | Out-Null }
+$lines.Add("") | Out-Null
 
-$warningsMd
-## Errors
+$lines.Add("## Next Step") | Out-Null
+$lines.Add("") | Out-Null
+$lines.Add([string]$json.nextStep) | Out-Null
+$lines.Add("") | Out-Null
 
-$errorsMd
-## Next Step
+$lines.Add("## Raw JSON (verbatim)") | Out-Null
+$lines.Add("") | Out-Null
+$lines.Add("~~~json") | Out-Null
+foreach ($ln in ($raw -split "`r?`n")) { $lines.Add($ln) | Out-Null }
+$lines.Add("~~~") | Out-Null
+$lines.Add("") | Out-Null
 
-$($json.nextStep)
+foreach ($ln in ($handoff -split "`r?`n")) { $lines.Add($ln) | Out-Null }
+$lines.Add("") | Out-Null
 
-## Report JSON (verbatim)
-
-~~~json
-$raw
-~~~
-
-$handoff
-"@
-
-Set-Content -LiteralPath $reportPath -Value $md -Encoding UTF8
+[System.IO.File]::WriteAllText($reportPath, ($lines -join [Environment]::NewLine), [System.Text.Encoding]::UTF8)
 
 Write-Host ("Wrote report: {0}" -f $reportPath)
 Write-Host ("traceId={0} status={1}" -f $traceId, $status)
