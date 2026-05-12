@@ -1,36 +1,36 @@
-# Web Application Template
+# CBV Operational Ecosystem
 
-This is a template for creating node.js / react / next.js web application managed by IDP Universal Workspace Manager.
+Repo này là **CBV Operational Ecosystem**: hệ sinh thái vận hành gồm tiêu chuẩn, cấu trúc repo, và các module theo domain (Apps Script / AppSheet / webapp / tests).
 
-## Structure
+## Current level
 
+- **LEVEL 2 — Testable Runtime**
+
+Level 2 tập trung vào **repo-only checks**:
+
+- Có cấu trúc kiểm thử rõ ràng
+- Có script test chạy được
+- Có script report tạo báo cáo append-only
+- Test Runtime tách khỏi Business Runtime
+- Có AI handoff summary sau mỗi lần test
+
+## Run Level 2 (PowerShell)
+
+Chạy kiểm tra (xuất `.tmp/test-result.json`):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
 ```
-.
-├── src/                  # Source code
-├── package.json          # Dependencies and scripts
-├── .idp-environments.json  # Environment configuration (DEV/STAGING/PROD)
-├── .idp.config.json      # IDP project metadata
-├── .gitignore
-└── README.md
+
+Tạo report append-only (xuất vào `00_SYSTEM_BRAIN/000_REPORTS/`):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\report.ps1
 ```
 
-## Environments
+## Key docs
 
-This project supports multi-environment configuration:
-- **DEV**: Development environment
-- **STAGING**: Staging environment  
-- **PROD**: Production environment
-
-Environment configuration is stored in `.idp-environments.json`.
-
-## Commands
-
-See package.json for available scripts.
-
-## IDP Integration
-
-This project is managed by IDP Universal Workspace Manager. Use IDP to:
-- Switch between environments
-- Build and deploy
-- Manage Git and CI/CD
-- View logs and reports
+- `LEVEL_2_TESTABLE_RUNTIME.md`
+- `AI_HANDOFF.md`
+- `00_SYSTEM_BRAIN/000_TEST_CONSOLE/TEST_RUNTIME_STANDARD.md`
+- `00_SYSTEM_BRAIN/000_TEST_CONSOLE/REPORT_CONTRACT_V1.md`
