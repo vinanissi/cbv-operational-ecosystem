@@ -5,7 +5,10 @@ function Pad3([int]$n) {
 }
 
 function Get-NextReportNumber([string]$reportsDir) {
-  if (-not (Test-Path -LiteralPath $reportsDir -PathType Container)) { return 1 }
+  if (-not (Test-Path -LiteralPath $reportsDir -PathType Container)) {
+    return 1
+  }
+
   $existing = Get-ChildItem -LiteralPath $reportsDir -File -ErrorAction SilentlyContinue
   $max = 0
   foreach ($f in $existing) {
@@ -19,13 +22,20 @@ function Get-NextReportNumber([string]$reportsDir) {
 
 function New-TraceId {
   $rand = -join ((97..122) | Get-Random -Count 6 | ForEach-Object { [char]$_ })
-  return ("trc_{0}_{1}_{2}" -f (Get-Date).ToUniversalTime().ToString('yyyyMMdd'), (Get-Date).ToUniversalTime().ToString('HHmmss'), $rand)
+  return (
+    "trc_{0}_{1}_{2}" -f
+      (Get-Date).ToUniversalTime().ToString('yyyyMMdd'),
+      (Get-Date).ToUniversalTime().ToString('HHmmss'),
+      $rand
+  )
 }
 
 function Require-Fields($obj, [string[]]$required) {
   $missing = New-Object 'System.Collections.Generic.List[string]'
   foreach ($k in $required) {
-    if ($null -eq $obj.PSObject.Properties[$k]) { $missing.Add($k) | Out-Null }
+    if ($null -eq $obj.PSObject.Properties[$k]) {
+      $missing.Add($k) | Out-Null
+    }
   }
   return $missing.ToArray()
 }

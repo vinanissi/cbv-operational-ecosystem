@@ -2,21 +2,35 @@ $ErrorActionPreference = 'Stop'
 
 function New-TraceId {
   $rand = -join ((97..122) | Get-Random -Count 6 | ForEach-Object { [char]$_ })
-  return ("trc_{0}_{1}_{2}" -f (Get-Date).ToUniversalTime().ToString('yyyyMMdd'), (Get-Date).ToUniversalTime().ToString('HHmmss'), $rand)
+  return (
+    "trc_{0}_{1}_{2}" -f
+      (Get-Date).ToUniversalTime().ToString('yyyyMMdd'),
+      (Get-Date).ToUniversalTime().ToString('HHmmss'),
+      $rand
+  )
 }
 
 function To-IsoUtcNow {
   return (Get-Date).ToUniversalTime().ToString('o')
 }
 
-function Add-Check([System.Collections.Generic.List[object]]$checks, [string]$code, [bool]$ok, [string]$severity, [string]$message, $detail) {
-  $checks.Add([ordered]@{
-    code = $code
-    ok = $ok
-    severity = $severity
-    message = $message
-    detail = $detail
-  }) | Out-Null
+function Add-Check(
+  [System.Collections.Generic.List[object]]$checks,
+  [string]$code,
+  [bool]$ok,
+  [string]$severity,
+  [string]$message,
+  $detail
+) {
+  $checks.Add(
+    [ordered]@{
+      code = $code
+      ok = $ok
+      severity = $severity
+      message = $message
+      detail = $detail
+    }
+  ) | Out-Null
 }
 
 $traceId = New-TraceId
@@ -53,13 +67,27 @@ $missingDirs = @()
 foreach ($d in $requiredDirs) {
   if (-not (Test-Path -LiteralPath $d -PathType Container)) { $missingDirs += $d }
 }
-Add-Check $checks "LEVEL2_DIRS_PRESENT" ($missingDirs.Count -eq 0) ($(if ($missingDirs.Count -eq 0) { "OK" } else { "ERROR" })) "Required Level 2 directories present." ([ordered]@{ missing = $missingDirs; required = $requiredDirs })
+
+Add-Check `
+  $checks `
+  "LEVEL2_DIRS_PRESENT" `
+  ($missingDirs.Count -eq 0) `
+  ($(if ($missingDirs.Count -eq 0) { "OK" } else { "ERROR" })) `
+  "Required Level 2 directories present." `
+  ([ordered]@{ missing = $missingDirs; required = $requiredDirs })
 
 $missingFiles = @()
 foreach ($f in $requiredFiles) {
   if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { $missingFiles += $f }
 }
-Add-Check $checks "LEVEL2_FILES_PRESENT" ($missingFiles.Count -eq 0) ($(if ($missingFiles.Count -eq 0) { "OK" } else { "ERROR" })) "Required Level 2 files present." ([ordered]@{ missing = $missingFiles; required = $requiredFiles })
+
+Add-Check `
+  $checks `
+  "LEVEL2_FILES_PRESENT" `
+  ($missingFiles.Count -eq 0) `
+  ($(if ($missingFiles.Count -eq 0) { "OK" } else { "ERROR" })) `
+  "Required Level 2 files present." `
+  ([ordered]@{ missing = $missingFiles; required = $requiredFiles })
 
 # ---- Git status (must not modify repo) ----
 $gitOk = $true
@@ -73,10 +101,22 @@ try {
 }
 
 if (-not $gitOk) {
-  Add-Check $checks "GIT_AVAILABLE" $false "ERROR" "Git commands failed. Ensure git is installed and this is a git repo." ([ordered]@{})
+  Add-Check `
+    $checks `
+    "GIT_AVAILABLE" `
+    $false `
+    "ERROR" `
+    "Git commands failed. Ensure git is installed and this is a git repo." `
+    ([ordered]@{})
   $errors.Add("GIT_UNAVAILABLE") | Out-Null
 } else {
-  Add-Check $checks "GIT_AVAILABLE" $true "OK" "Git available." ([ordered]@{ branch = $branch })
+  Add-Check `
+    $checks `
+    "GIT_AVAILABLE" `
+    $true `
+    "OK" `
+    "Git available." `
+    ([ordered]@{ branch = $branch })
   $dirty = $false
   $lines = @()
   if ($null -ne $porcelain) {
@@ -85,9 +125,21 @@ if (-not $gitOk) {
   }
   if ($dirty) {
     $warnings.Add("WORKING_TREE_DIRTY") | Out-Null
-    Add-Check $checks "GIT_WORKING_TREE_CLEAN" $false "WARNING" "Working tree has uncommitted changes (expected during Level 2 setup before commit)." ([ordered]@{ changed = $lines })
+    Add-Check `
+      $checks `
+      "GIT_WORKING_TREE_CLEAN" `
+      $false `
+      "WARNING" `
+      "Working tree has uncommitted changes (expected during Level 2 setup before commit)." `
+      ([ordered]@{ changed = $lines })
   } else {
-    Add-Check $checks "GIT_WORKING_TREE_CLEAN" $true "OK" "Working tree clean." ([ordered]@{})
+    Add-Check `
+      $checks `
+      "GIT_WORKING_TREE_CLEAN" `
+      $true `
+      "OK" `
+      "Working tree clean." `
+      ([ordered]@{})
   }
 }
 
